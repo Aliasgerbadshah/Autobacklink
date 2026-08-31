@@ -1,11 +1,16 @@
 const http = require('http');
 const { chromium } = require('playwright-core');
 
-// Your Playwright automation logic
 async function runAutomation() {
-  // Replace with your actual Browserless.io or Cloud Browser WebSocket URL
+  const token = process.env.BROWSERLESS_TOKEN;
+  
+  if (!token) {
+    throw new Error("BROWSERLESS_TOKEN environment variable is missing.");
+  }
+
+  // Connects to Browserless using your API token
   const browser = await chromium.connectOverCDP(
-    'wss://chrome.browserless.io?token=YOUR_API_KEY'
+    `wss://production-sfo.browserless.io/chromium?token=${token}`
   );
 
   const context = await browser.newContext();
@@ -17,7 +22,6 @@ async function runAutomation() {
   await browser.close();
 }
 
-// HTTP Server to satisfy Hostinger health checks & trigger script
 const PORT = process.env.PORT || 3000;
 const server = http.createServer(async (req, res) => {
   if (req.url === '/run') {
