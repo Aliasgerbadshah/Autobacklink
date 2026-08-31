@@ -8,19 +8,29 @@ async function runAutomationAndGetScreenshot() {
     throw new Error("BROWSERLESS_TOKEN environment variable is missing.");
   }
 
+  // Connect via the Browserless /stealth route instead of plain /chromium
   const browser = await chromium.connectOverCDP(
-    `wss://production-sfo.browserless.io/chromium?token=${token}`
+    `wss://production-sfo.browserless.io/stealth?token=${token}`
   );
 
   const context = await browser.newContext({
-    viewport: { width: 1280, height: 720 }
+    viewport: { width: 1280, height: 720 },
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    locale: 'en-US',
+    timezoneId: 'America/New_York'
   });
+
   const page = await context.newPage();
 
-  // Navigate to target site
-  await page.goto('https://medium.com', { waitUntil: 'networkidle' });
+  // Navigate and wait for potential Cloudflare challenge redirects to settle
+  await page.goto('https://medium.com', { 
+    waitUntil: 'domcontentloaded',
+    timeout: 60000 
+  });
 
-  // Capture the screenshot as an in-memory buffer
+  // Brief pause to allow any JS challenge solvers to run
+  await page.waitForTimeout(5000);
+
   const imageBuffer = await page.screenshot({ fullPage: false });
 
   await browser.close();
@@ -33,7 +43,6 @@ const server = http.createServer(async (req, res) => {
     try {
       const imageBuffer = await runAutomationAndGetScreenshot();
       
-      // Serve the image directly to your browser
       res.writeHead(200, {
         'Content-Type': 'image/png',
         'Content-Length': imageBuffer.length
