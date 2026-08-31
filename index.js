@@ -3,12 +3,6 @@ const { chromium } = require('playwright-core');
 
 async function runAutomation() {
   const token = process.env.BROWSERLESS_TOKEN;
-  
-  if (!token) {
-    throw new Error("BROWSERLESS_TOKEN environment variable is missing.");
-  }
-
-  // Connects to Browserless using your API token
   const browser = await chromium.connectOverCDP(
     `wss://production-sfo.browserless.io/chromium?token=${token}`
   );
@@ -16,8 +10,12 @@ async function runAutomation() {
   const context = await browser.newContext();
   const page = await context.newPage();
 
+  console.log("Navigating to Medium...");
   await page.goto('https://medium.com');
-  console.log('Successfully navigated:', await page.title());
+
+  // Take a screenshot and save it in your project directory
+  await page.screenshot({ path: 'screenshot.png' });
+  console.log("Screenshot taken successfully!");
 
   await browser.close();
 }
