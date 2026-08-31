@@ -3,18 +3,18 @@ const { chromium } = require('playwright-core');
 const fs = require('fs');
 const path = require('path');
 
-/**
- * Executes the Medium auto-posting routine via Browserless stealth endpoint.
- */
 async function publishMediumPost(title, content) {
   const token = process.env.BROWSERLESS_TOKEN;
   if (!token) {
     throw new Error("BROWSERLESS_TOKEN environment variable is not defined in Hostinger.");
   }
 
-  // Connect via Browserless Stealth + Residential Proxy + Captcha Solver
-  const endpoint = `wss://production-sfo.browserless.io/stealth?token=${token}&proxy=residential&solveCaptchas=true`;
-  const browser = await chromium.connectOverCDP(endpoint);
+  // Construct the explicit Browserless CDP WebSocket URL
+  // Using standard chrome endpoint with stealth and JSON parameters
+  const wsUrl = `wss://chrome.browserless.io/stealth?token=${token}&--disable-web-security=true`;
+  
+  console.log("Connecting to Browserless...");
+  const browser = await chromium.connectOverCDP(wsUrl);
 
   // Load saved session (cookies/tokens) from local auth export
   const authPath = path.join(__dirname, 'auth.json');
@@ -32,12 +32,16 @@ async function publishMediumPost(title, content) {
 
   try {
     console.log("Navigating to Medium editor...");
-    await page.goto('https://medium.com/new-story', { 
+    
+    // Navigate and log response status code
+    const response = await page.goto('https://medium.com/new-story', { 
       waitUntil: 'domcontentloaded', 
       timeout: 60000 
     });
 
-    // Wait for Cloudflare/Turnstile anti-bot checks to settle
+    console.log(`Page HTTP Response Status: ${response.status()}`);
+
+    // Allow anti-bot scripts to run
     await page.waitForTimeout(8000);
 
     const titleSelector = 'p[data-placeholder="Title"]';
@@ -53,12 +57,7 @@ async function publishMediumPost(title, content) {
     // Allow auto-save to complete
     await page.waitForTimeout(3000);
 
-    // Optional: Click Publish controls automatically
-    // await page.click('button[data-action="prepare-publish"]');
-    // await page.waitForTimeout(1000);
-    // await page.click('button[data-action="publish"]');
-
-    // Return screenshot buffer to visually verify execution in-browser
+    // Capture screenshot
     const imageBuffer = await page.screenshot({ fullPage: false });
     return imageBuffer;
 
@@ -67,7 +66,7 @@ async function publishMediumPost(title, content) {
   }
 }
 
-// Simple HTTP Web Server to satisfy Hostinger execution & Cron endpoints
+// Simple HTTP Web Server for Hostinger
 const PORT = process.env.PORT || 3000;
 const server = http.createServer(async (req, res) => {
   if (req.url === '/run') {
@@ -80,6 +79,7 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'image/png' });
       res.end(imageBuffer);
     } catch (error) {
+      console.error(error);
       res.writeHead(500, { 'Content-Type': 'text/plain' });
       res.end(`Execution failed: ${error.message}`);
     }
